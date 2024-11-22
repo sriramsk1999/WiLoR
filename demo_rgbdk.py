@@ -16,11 +16,10 @@ LIGHT_PURPLE=(0.25098039,  0.274117647,  0.65882353)
 
 def main():
     parser = argparse.ArgumentParser(description='WiLoR demo code')
-    parser.add_argument('--img_folder', type=str, default='images', help='Folder with input images')
+    parser.add_argument('--npy_folder', type=str, default='npy_files', help='Folder with input npy files')
     parser.add_argument('--out_folder', type=str, default='out_demo', help='Output folder to save rendered results')
     parser.add_argument('--save_mesh', dest='save_mesh', action='store_true', default=False, help='If set, save meshes to disk also')
     parser.add_argument('--rescale_factor', type=float, default=2.0, help='Factor for padding the bbox')
-    parser.add_argument('--file_type', nargs='+', default=['*.jpg', '*.png', '*.jpeg'], help='List of file extensions to consider')
 
     args = parser.parse_args()
 
@@ -39,11 +38,14 @@ def main():
     # Make output directory if it does not exist
     os.makedirs(args.out_folder, exist_ok=True)
 
-    # Get all demo images ends with .jpg or .png
-    img_paths = [img for end in args.file_type for img in Path(args.img_folder).glob(end)]
-    # Iterate over all images in folder
-    for img_path in img_paths:
-        img_cv2 = cv2.imread(str(img_path))
+    # Get all npy files in the folder
+    npy_paths = list(Path(args.npy_folder).glob('*.npy'))
+    # Iterate over all npy files in folder
+    for npy_path in npy_paths:
+        data = np.load(npy_path, allow_pickle=True)
+        data = data.item()
+        img_cv2 = cv2.cvtColor(data['rgb'], cv2.COLOR_BGR2RGB)
+        K = data['K']
         detections = detector(img_cv2, conf = 0.3, verbose=False)[0]
         bboxes    = []
         is_right  = []
@@ -77,15 +79,16 @@ def main():
             box_center    = batch["box_center"].float()
             box_size      = batch["box_size"].float()
             img_size      = batch["img_size"].float()
-            scaled_focal_length = model_cfg.EXTRA.FOCAL_LENGTH / model_cfg.MODEL.IMAGE_SIZE * img_size.max()
-            pred_cam_t_full     = cam_crop_to_full(pred_cam, box_center, box_size, img_size, scaled_focal_length).detach().cpu().numpy()
+            # scaled_focal_length = model_cfg.EXTRA.FOCAL_LENGTH / model_cfg.MODEL.IMAGE_SIZE * img_size.max()
+            scaled_focal_length = K[0, 0]
+            pred_cam_t_full     = cam_crop_to_full(pred_cam, box_center, box_size, K).detach().cpu().numpy()
 
             
             # Render the result
             batch_size = batch['img'].shape[0]
             for n in range(batch_size):
-                # Get filename from path img_path
-                img_fn, _ = os.path.splitext(os.path.basename(img_path))
+                # Get filename from path npy_path
+                img_fn, _ = os.path.splitext(os.path.basename(npy_path))
                 
                 verts  = out['pred_vertices'][n].detach().cpu().numpy()
                 joints = out['pred_keypoints_3d'][n].detach().cpu().numpy()
@@ -94,7 +97,7 @@ def main():
                 verts[:,0]  = (2*is_right-1)*verts[:,0]
                 joints[:,0] = (2*is_right-1)*joints[:,0]
                 cam_t = pred_cam_t_full[n]
-                kpts_2d = project_full_img(verts, cam_t, scaled_focal_length, img_size[n])
+                kpts_2d = project_full_img(verts, cam_t, K)
                 
                 all_verts.append(verts)
                 all_cam_t.append(cam_t)
@@ -106,7 +109,7 @@ def main():
                 # Save all meshes to disk
                 if args.save_mesh:
                     camera_translation = cam_t.copy()
-                    tmesh = renderer.vertices_to_trimesh(verts, camera_translation, LIGHT_PURPLE, is_right=is_right)
+                    tmesh = renderer.vertices_to_trimesh_using_depth(verts, camera_translation, data['depth'], scaled_focal_length, img_size[n], mesh_base_color=LIGHT_PURPLE, is_right=is_right, K=K)
                     tmesh.export(os.path.join(args.out_folder, f'{img_fn}_{n}.obj'))
 
         # Render front view
@@ -125,18 +128,13 @@ def main():
 
             cv2.imwrite(os.path.join(args.out_folder, f'{img_fn}.jpg'), 255*input_img_overlay[:, :, ::-1])
 
-def project_full_img(points, cam_trans, focal_length, img_res): 
-    camera_center = [img_res[0] / 2., img_res[1] / 2.]
-    K = torch.eye(3) 
-    K[0,0] = focal_length
-    K[1,1] = focal_length
-    K[0,2] = camera_center[0]
-    K[1,2] = camera_center[1]
+def project_full_img(points, cam_trans, K):
     points = points + cam_trans
-    points = points / points[..., -1:] 
+    points = points / points[..., -1:]
     
     V_2d = (K @ points.T).T 
     return V_2d[..., :-1]
+
 
 if __name__ == '__main__':
     main()

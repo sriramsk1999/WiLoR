@@ -9,15 +9,13 @@ import cv2
 from yacs.config import CfgNode
 from typing import List, Optional
 
-def cam_crop_to_full(cam_bbox, box_center, box_size, img_size, focal_length=5000.):
+def cam_crop_to_full(cam_bbox, box_center, box_size, K):
     # Convert cam_bbox to full image
-    img_w, img_h = img_size[:, 0], img_size[:, 1]
     cx, cy, b = box_center[:, 0], box_center[:, 1], box_size
-    w_2, h_2 = img_w / 2., img_h / 2.
     bs = b * cam_bbox[:, 0] + 1e-9
-    tz = 2 * focal_length / bs
-    tx = (2 * (cx - w_2) / bs) + cam_bbox[:, 1]
-    ty = (2 * (cy - h_2) / bs) + cam_bbox[:, 2]
+    tz = 2 * K[0, 0] / bs
+    tx = (2 * (cx - K[0, 2]) / bs) + cam_bbox[:, 1]
+    ty = (2 * (cy - K[1, 2]) / bs) + cam_bbox[:, 2]
     full_cam = torch.stack([tx, ty, tz], dim=-1)
     return full_cam
 
@@ -132,6 +130,25 @@ def create_raymond_lights() -> List[pyrender.Node]:
         ))
 
     return nodes
+
+
+def project_full_img(points, cam_trans, K): 
+    points = points + cam_trans
+    points = points / points[..., -1:]
+    V_2d = (K @ points.T).T 
+    return V_2d[..., :-1]
+
+
+def full_image_to_3d(pixels, depths, K):
+    pixels = torch.tensor(pixels, dtype=torch.float32)
+    K = torch.tensor(K, dtype=torch.float32)
+    points = torch.zeros(pixels.shape[0], 3, dtype=torch.float32)
+    depths = torch.tensor(depths.squeeze(), dtype=torch.float32)
+    points[..., 0] = (pixels[..., 0] - K[0, 2]) * depths / K[0, 0]
+    points[..., 1] = (pixels[..., 1] - K[1, 2]) * depths / K[1, 1]
+    points[..., 2] = depths
+    return points
+
 
 class Renderer:
 
@@ -269,6 +286,40 @@ class Renderer:
         mesh.apply_transform(rot)
         return mesh
 
+
+    def vertices_to_trimesh_using_depth(self, vertices, camera_translation, depths, focal_length, img_res, mesh_base_color=(1.0, 1.0, 0.9), rot_axis=[1,0,0], rot_angle=0, is_right=1, K=None):
+        # material = pyrender.MetallicRoughnessMaterial(
+        #     metallicFactor=0.0,
+        #     alphaMode='OPAQUE',
+        #     baseColorFactor=(*mesh_base_color, 1.0))
+
+        # get mean ratio of depth from visible vertices
+        color, depths_render = self.render_rgba(vertices, camera_translation, rot_axis=rot_axis, rot=rot_angle, mesh_base_color=mesh_base_color, render_res=img_res, focal_length=focal_length, is_right=is_right, return_depth=True)
+
+
+        mask = (depths > 0) & (depths_render > 0)
+        ratios = np.zeros_like(depths)
+        ratios[mask] = depths[mask] / depths_render[mask]
+        mean_depth_ratio = np.mean(ratios[mask])
+
+        vertices_cam = vertices.copy() + camera_translation
+        # Modify the depth of vertices_cam using the mean depth ratio
+        vertices_cam_2d = project_full_img(vertices_cam, [0,0,0], K)
+        vertices_cam = full_image_to_3d(vertices_cam_2d, vertices_cam[..., -1:] * mean_depth_ratio, K)
+
+        vertex_colors = np.array([(*mesh_base_color, 1.0)] * vertices.shape[0])
+        if is_right:
+            mesh = trimesh.Trimesh(vertices_cam, self.faces.copy(), vertex_colors=vertex_colors)
+        else:
+            mesh = trimesh.Trimesh(vertices_cam, self.faces_left.copy(), vertex_colors=vertex_colors)
+        # mesh = trimesh.Trimesh(vertices.copy(), self.faces.copy())
+        
+        rot = trimesh.transformations.rotation_matrix(
+                np.radians(rot_angle), rot_axis)
+        mesh.apply_transform(rot)
+        return mesh
+    
+
     def render_rgba(
             self,
             vertices: np.array,
@@ -283,6 +334,8 @@ class Renderer:
             render_res=[256, 256],
             focal_length=None,
             is_right=None,
+            return_depth=True,
+            K=None,
         ):
 
         renderer = pyrender.OffscreenRenderer(viewport_width=render_res[0],
@@ -294,6 +347,8 @@ class Renderer:
         #     baseColorFactor=(*mesh_base_color, 1.0))
 
         focal_length = focal_length if focal_length is not None else self.focal_length
+        if K is not None:
+            focal_length = K[0, 0]
 
         if cam_t is not None:
             camera_translation = cam_t.copy()
@@ -311,8 +366,12 @@ class Renderer:
 
         camera_pose = np.eye(4)
         camera_pose[:3, 3] = camera_translation
-        camera_center = [render_res[0] / 2., render_res[1] / 2.]
-        camera = pyrender.IntrinsicsCamera(fx=focal_length, fy=focal_length,
+        if K is not None:
+            camera = pyrender.IntrinsicsCamera(fx=K[0,0], fy=K[1,1],
+                                               cx=K[0, 2], cy=K[1, 2], zfar=1e12)
+        else:
+            camera_center = [render_res[0] / 2., render_res[1] / 2.]
+            camera = pyrender.IntrinsicsCamera(fx=focal_length, fy=focal_length,
                                            cx=camera_center[0], cy=camera_center[1], zfar=1e12)
 
         # Create camera node and add it to pyRender scene
@@ -328,6 +387,9 @@ class Renderer:
         color, rend_depth = renderer.render(scene, flags=pyrender.RenderFlags.RGBA)
         color = color.astype(np.float32) / 255.0
         renderer.delete()
+
+        if return_depth:
+            return color, rend_depth
 
         return color
 
