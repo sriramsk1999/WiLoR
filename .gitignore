@@ -1,2 +1,10 @@
+# Heavy files
 /pretrained_models/detector.pt
 /pretrained_models/wilor_final.ckpt
+/mano_data/MANO_RIGHT.pkl
+
+### Python ###
+# Byte-compiled / optimized / DLL files
+**/__pycache__/
+*.py[cod]
+*$py.class
