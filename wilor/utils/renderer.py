@@ -9,6 +9,8 @@ import cv2
 from yacs.config import CfgNode
 from typing import List, Optional
 
+DEPTH_FILTER_MM = 1600
+
 def cam_crop_to_full(cam_bbox, box_center, box_size, K):
     # Convert cam_bbox to full image
     cx, cy, b = box_center[:, 0], box_center[:, 1], box_size
@@ -296,8 +298,8 @@ class Renderer:
         # get mean ratio of depth from visible vertices
         color, depths_render = self.render_rgba(vertices, camera_translation, rot_axis=rot_axis, rot=rot_angle, mesh_base_color=mesh_base_color, render_res=img_res, focal_length=focal_length, is_right=is_right, return_depth=True)
 
-
-        mask = (depths > 0) & (depths_render > 0)
+        # points within 1.6 meters from the camera
+        mask = (depths > 0) & (depths_render > 0) & (depths < DEPTH_FILTER_MM) & (depths_render < DEPTH_FILTER_MM)
         ratios = np.zeros_like(depths)
         ratios[mask] = depths[mask] / depths_render[mask]
         mean_depth_ratio = np.mean(ratios[mask])
