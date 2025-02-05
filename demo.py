@@ -10,7 +10,7 @@ from typing import Dict, Optional
 from wilor.models import WiLoR, load_wilor
 from wilor.utils import recursive_to
 from wilor.datasets.vitdet_dataset import ViTDetDataset, DEFAULT_MEAN, DEFAULT_STD
-from wilor.utils.renderer import Renderer, cam_crop_to_full
+from wilor.utils.renderer import Renderer, old_cam_crop_to_full
 from ultralytics import YOLO 
 LIGHT_PURPLE=(0.25098039,  0.274117647,  0.65882353)
 
@@ -78,7 +78,7 @@ def main():
             box_size      = batch["box_size"].float()
             img_size      = batch["img_size"].float()
             scaled_focal_length = model_cfg.EXTRA.FOCAL_LENGTH / model_cfg.MODEL.IMAGE_SIZE * img_size.max()
-            pred_cam_t_full     = cam_crop_to_full(pred_cam, box_center, box_size, img_size, scaled_focal_length).detach().cpu().numpy()
+            pred_cam_t_full     = old_cam_crop_to_full(pred_cam, box_center, box_size, img_size, scaled_focal_length).detach().cpu().numpy()
 
             
             # Render the result
