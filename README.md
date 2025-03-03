@@ -39,6 +39,9 @@ Pseudocode: <br>
 The WiLoR hand 2D projection might match pixels that do not match with the real hand but with an object (i.e. when the real hand is occluded by that object). That would mean in steps 3.2) and 4) we include the depths
 of the object rather than the ones from the real hand, making the scaling a bit inaccurate.
 
+## Further comments:
+I'm not sure if the MANO model also considers the size of the hand. That means that if we scale the hand, it might not correspond anymore to a MANO model hand.
+
 <div align="center">
 
 # WiLoR: End-to-end 3D hand localization and reconstruction in-the-wild
