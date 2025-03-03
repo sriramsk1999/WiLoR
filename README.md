@@ -1,5 +1,46 @@
 <div align="center">
 
+# Scaling for better 3D Alignment
+
+</div>
+
+## What we do
+Outputs of WiLoR:
+- 3D hand and its 2D projection onto the image. <br>
+What we infer:
+- we modify (or "scale") the coordinates of the 3D hand so they align (in 3D) with the real 3D hand. We leverage their alignment in the image. <br>
+
+Pseudocode: <br>
+1) Identify which of the 3D wilor hand points are visible from the camera point of view.
+2) Average their depth (obtaining avg_3d_wilor_hand)
+3) Identify which of the pixels in the image correspond to these 3D wilor hand points
+    3.1) Project the 3D wilor hand points onto the image
+    3.2) Create a mask from the projection
+4) Average the depth of the pixels from step 3, obtaining avg_3d_real_hand.
+    4.1) Note: we don’t consider the real point clouds that are further away than 1.6m (distance to the end of the experiments table in this case)
+6) Compute the ratio of both averages: depth_ratio = avg_3d_real_hand / avg_3d_wilor_hand.
+7) Scale the 3D wilor hand points using the depth_ratio
+    6.1) Save their depths into an array old_depths
+    6.1) Project the 3D wilor hand points onto the image
+    6.2) Turn those projected points back to 3D considering their new depths = old_depths * depth_ratio, and considering the real camera intrinsics.
+
+
+## Before:
+<img src="https://github.com/user-attachments/assets/c34ad910-0fbe-4356-aded-486195a97485" width="300">
+
+## After:
+<img src="https://github.com/user-attachments/assets/4a54cdb3-648e-4a45-9d4d-afb4a2cc14ae" width="300">
+
+## 2D projection for reference:
+<img src="https://github.com/user-attachments/assets/46bf054b-a092-4b77-8b1a-b2a519e7f9f3" width="300">
+
+
+## Areas for improvement:
+The WiLoR hand 2D projection might match pixels that do not match with the real hand but with an object (i.e. when the real hand is occluded by that object). That would mean in steps 3.2) and 4) we include the depths
+of the object rather than the ones from the real hand, making the scaling a bit inaccurate.
+
+<div align="center">
+
 # WiLoR: End-to-end 3D hand localization and reconstruction in-the-wild
 
 [Rolandos Alexandros Potamias](https://rolpotamias.github.io)<sup>1</sup> &emsp; [Jinglei Zhang]()<sup>2</sup> &emsp; [Jiankang Deng](https://jiankangdeng.github.io/)<sup>1</sup> &emsp; [Stefanos Zafeiriou](https://www.imperial.ac.uk/people/s.zafeiriou)<sup>1</sup>  
