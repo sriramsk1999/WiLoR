@@ -1,3 +1,12 @@
+"""Example usage:
+    # Process all RGB-D + K images wtihin a folder to get hand detection and pose estimation
+    python demo_rgbdk.py --npy_folder demo_rgbdk --out_folder demo_out --save_mesh
+    
+    # This will process demo_rgbdk/cup.npy and save:
+    # - Rendered visualization as out_demo/cup.jpg
+    # - 3D hand mesh (if --save_mesh is used) as out_demo/cup_*.obj
+"""
+
 from pathlib import Path
 import torch
 import argparse
