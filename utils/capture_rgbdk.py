@@ -6,8 +6,8 @@ import pyk4a
 from pyk4a.calibration import CalibrationType
 
 # Use
-# python3 capture_rgbdk.py --output_path ../../data/rgbdks/
-# python3 capture_rgbdk.py --output_path ../../data/rgbdks/ --to_images
+# python3 utils/capture_rgbdk.py --output_path ./demo_rgbdk/
+# python3 utils/capture_rgbdk.py --output_path ./demo_rgbdk/ --to_images
 # rsync -r --progress ~/robot-grasp/data/rgbdks/rgbdk.npy jacinto@ham1.pc.cs.cmu.edu:/home/jacinto/robot-grasp/data/rgbdks
 
 def capture_rgbd(output_path, to_images, name, device_id=0):

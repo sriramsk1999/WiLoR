@@ -301,7 +301,7 @@ class Renderer:
         return mesh
 
 
-    def vertices_to_trimesh_using_depth(self, vertices, camera_translation, depths, focal_length, img_res, mesh_base_color=(1.0, 1.0, 0.9), rot_axis=[1,0,0], rot_angle=0, is_right=1, K=None):
+    def vertices_to_trimesh_using_depth(self, vertices, camera_translation, depths, focal_length, img_res, mesh_base_color=(1.0, 1.0, 0.9), rot_axis=[1,0,0], rot_angle=0, is_right=1, K=None, hand_mask=None):
         # material = pyrender.MetallicRoughnessMaterial(
         #     metallicFactor=0.0,
         #     alphaMode='OPAQUE',
@@ -310,8 +310,36 @@ class Renderer:
         # get mean ratio of depth from visible vertices
         color, depths_render = self.render_rgba(vertices, camera_translation, rot_axis=rot_axis, rot=rot_angle, mesh_base_color=mesh_base_color, render_res=img_res, focal_length=focal_length, is_right=is_right, return_depth=True)
 
-        ## points within 1.6 meters from the camera
+        ## points within 1.6 meters from the camera. depth_render acts as a mask already, as the depths of the points that don't belong to the mask are set to 0
         mask = (depths > 0) & (depths_render > 0) & (depths < DEPTH_FILTER_MM) & (depths_render < DEPTH_FILTER_MM)
+        
+        # Apply additional hand mask if provided
+        if hand_mask is not None:
+            # Save original mask for comparison
+            # mask_before = mask.copy()
+            
+            # Ensure hand_mask has same shape as depth mask
+            if hand_mask.shape != mask.shape:
+                print(f"Resizing hand mask to {mask.shape}")
+                hand_mask = cv2.resize(hand_mask.astype(float), (mask.shape[1], mask.shape[0])) > 0.5
+            
+            # Convert both masks to boolean numpy arrays
+            mask = mask.astype(bool)
+            hand_mask = hand_mask.astype(bool)
+            mask = mask & hand_mask
+            
+            # # Visualize masks before and after
+            # import matplotlib.pyplot as plt
+            # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+            # ax1.imshow(mask_before)
+            # ax1.set_title('Mask before hand mask')
+            # ax1.axis('off')
+            # ax2.imshow(mask)
+            # ax2.set_title('Mask after hand mask')
+            # ax2.axis('off')
+            # plt.tight_layout()
+            # plt.show()
+        
         ratios = np.zeros_like(depths)
         ratios[mask] = depths[mask] / depths_render[mask]
         mean_depth_ratio = np.mean(ratios[mask])

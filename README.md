@@ -93,7 +93,10 @@ conda activate wilor
 
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu117
 # Install requirements
-pip install -r requirements.txt
+pip install -r grounding-dino/requirements.txt
+# Additional requirements from the fork
+pip install open3d
+pip install pyk4a
 ```
 Download the pretrained models using: 
 ```bash
