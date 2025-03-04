@@ -25,19 +25,38 @@ Pseudocode: <br>
     6.2) Turn those projected points back to 3D considering their new depths = old_depths * depth_ratio, and considering the real camera intrinsics.
 
 
-## Before:
+### Before:
 <img src="https://github.com/user-attachments/assets/c34ad910-0fbe-4356-aded-486195a97485" width="300">
 
-## After:
+### After:
 <img src="https://github.com/user-attachments/assets/4a54cdb3-648e-4a45-9d4d-afb4a2cc14ae" width="300">
 
-## 2D projection for reference:
+### 2D projection for reference:
 <img src="https://github.com/user-attachments/assets/46bf054b-a092-4b77-8b1a-b2a519e7f9f3" width="300">
 
 
-## Areas for improvement:
-The WiLoR hand 2D projection might match pixels that do not match with the real hand but with an object (i.e. when the real hand is occluded by that object). That would mean in steps 3.2) and 4) we include the depths
-of the object rather than the ones from the real hand, making the scaling a bit inaccurate.
+## Further improvements using GSAM2 segmentation
+In step 3.2), the WiLoR hand 2D projection might match pixels that do not match with the real hand but with an object (i.e. when the real hand is occluded by that object). That would mean in steps 3.2) and 4) we include the depths of the object rather than the ones from the real hand, making the scaling a bit inaccurate. We solve this issue using a hand segmentation from GSAM2.
+This improvement is set by default.
+<br>
+Here's an example taken from the file "demo_rgbk/mug_lots_of_occlusion.npy":
+### Before
+<img src="https://github.com/user-attachments/assets/a50043ed-e2b3-43a7-a870-0deac4371477" width="300">
+
+### After
+<img src="https://github.com/user-attachments/assets/3865c951-5fc7-4883-a1a0-56671b6ce167" width="300">
+
+
+## Running it
+```bash
+python demo_rgbdk.py --npy_folder demo_rgbdk --out_folder demo_out --save_mesh
+python demo_rgbdk.py --npy_folder demo_rgbdk --out_folder demo_out --save_mesh --no_gsam2
+```
+
+## Visualizations
+Python scripts have been added to the folder [utils](https://github.com/jacintosuner/WiLoR/tree/main/utils) to:
+- capture an rbgdk frame (rgb + depth + camera intrinsics): [capture_rgbdk.py](https://github.com/jacintosuner/WiLoR/blob/main/utils/capture_rgbdk.py)
+- visualize an rgbdk frame together with / or an obj file together with / or a pcd file (npy file with point cloud info): [visualize_rgbdk_or_obj_or_pcd.py ](https://github.com/jacintosuner/WiLoR/blob/main/utils/visualize_rgbdk_or_obj_or_pcd.py)
 
 ## Further comments:
 I'm not sure if the MANO model also considers the size of the hand. That means that if we scale the hand, it might not correspond anymore to a MANO model hand.
