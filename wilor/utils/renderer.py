@@ -311,7 +311,7 @@ class Renderer:
         color, depths_render = self.render_rgba(vertices, camera_translation, rot_axis=rot_axis, rot=rot_angle, mesh_base_color=mesh_base_color, render_res=img_res, focal_length=focal_length, is_right=is_right, return_depth=True)
 
         ## points within 1.6 meters from the camera. depth_render acts as a mask already, as the depths of the points that don't belong to the mask are set to 0
-        mask = (depths > 0) & (depths_render > 0) & (depths < DEPTH_FILTER_MM) & (depths_render < DEPTH_FILTER_MM)
+        mask = (depths > 0) & (depths_render > 0) & (depths < DEPTH_FILTER_MM)
         
         # Apply additional hand mask if provided
         if hand_mask is not None:
