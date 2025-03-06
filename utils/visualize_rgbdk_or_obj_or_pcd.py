@@ -66,7 +66,7 @@ def get_obj_pcd(file_path):
     pcd.colors = o3d.utility.Vector3dVector(colors)
     return pcd
 
-def visualize(file_paths, eef_pose=None):
+def visualize(file_paths, eef_pose=None, in_world_frame=False):
     
     combined_pcd = o3d.geometry.PointCloud()
 
@@ -89,41 +89,46 @@ def visualize(file_paths, eef_pose=None):
     # Create coordinate frame for reference
     camera_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2, origin=[0, 0, 0])
 
-    # Load the camera calibration transformation matrix
-    CAMERA_CALIBRATION_FILE = os.path.expanduser('~/robot-grasp/data/camera_calibration/camera2robot.npz')
-    T_cam_to_world = np.load(CAMERA_CALIBRATION_FILE, allow_pickle=True)
-    T_world_to_cam = np.linalg.inv(T_cam_to_world)
-
-    if eef_pose:
-        # Transform EEF_POSE from robot frame to camera frame
-        eef_pose_cam_frame = T_world_to_cam @ eef_pose
-
-        # Create EEF pose frame
-        eef_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
-        eef_frame.transform(eef_pose_cam_frame)
-
-    # Create world frame
-    world_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2, origin=[0, 0, 0])
-    world_frame.transform(T_world_to_cam)
-
-    # Add reference frames to the visualization
-    if eef_pose:
+    if not in_world_frame:
         o3d.visualization.draw_geometries(
-            [camera_frame, world_frame, combined_pcd, eef_frame],
+            [combined_pcd],
             lookat=combined_pcd.get_center(),
             up=np.array([0.0, -1.0, 0.0]),
             front=-combined_pcd.get_center(),
             zoom=1
         )
     else:
-        o3d.visualization.draw_geometries(
-        [camera_frame, world_frame, combined_pcd],
-        lookat=combined_pcd.get_center(),
-        up=np.array([0.0, -1.0, 0.0]),
-        front=-combined_pcd.get_center(),
-        zoom=1
-        )
+        # Load the camera calibration transformation matrix
+        CAMERA_CALIBRATION_FILE = os.path.expanduser('~/robot-grasp/data/camera_calibration/camera2robot.npz')
+        T_cam_to_world = np.load(CAMERA_CALIBRATION_FILE, allow_pickle=True)
+        T_world_to_cam = np.linalg.inv(T_cam_to_world)
+        # Create world frame
+        world_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2, origin=[0, 0, 0])
+        world_frame.transform(T_world_to_cam)
 
+        if eef_pose:
+            # Transform EEF_POSE from robot frame to camera frame
+            eef_pose_cam_frame = T_world_to_cam @ eef_pose
+
+            # Create EEF pose frame
+            eef_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
+            eef_frame.transform(eef_pose_cam_frame)
+
+            o3d.visualization.draw_geometries(
+                [camera_frame, world_frame, combined_pcd, eef_frame],
+                lookat=combined_pcd.get_center(),
+                up=np.array([0.0, -1.0, 0.0]),
+                front=-combined_pcd.get_center(),
+                zoom=1
+            )
+        else:
+            o3d.visualization.draw_geometries(
+            [camera_frame, world_frame, combined_pcd],
+            lookat=combined_pcd.get_center(),
+            up=np.array([0.0, -1.0, 0.0]),
+            front=-combined_pcd.get_center(),
+            zoom=1
+            )
 
 if __name__ == '__main__':
     # print('Starting robot')

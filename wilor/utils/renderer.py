@@ -9,7 +9,8 @@ import cv2
 from yacs.config import CfgNode
 from typing import List, Optional
 
-DEPTH_FILTER_MM = 1600
+DEPTH_FILTER_MM = 1600 # None # TAKES PRIORITY OVER DEPTH_FILTER_PERCENTILE
+DEPTH_FILTER_PERCENTILE = 95
 
 def cam_crop_to_full(cam_bbox, box_center, box_size, K):
     # Convert cam_bbox to full image
@@ -310,8 +311,13 @@ class Renderer:
         # get mean ratio of depth from visible vertices
         color, depths_render = self.render_rgba(vertices, camera_translation, rot_axis=rot_axis, rot=rot_angle, mesh_base_color=mesh_base_color, render_res=img_res, focal_length=focal_length, is_right=is_right, return_depth=True)
 
-        ## points within 1.6 meters from the camera. depth_render acts as a mask already, as the depths of the points that don't belong to the mask are set to 0
-        mask = (depths > 0) & (depths_render > 0) & (depths < DEPTH_FILTER_MM)
+        ## Filter out points beyond a certain depth percentile. depth_render acts as a mask (identifies the 2D projected wilor hand) since points outside the mask have depth=0
+        if DEPTH_FILTER_MM is None:
+            depth_filter_percentile = np.percentile(depths[depths > 0], DEPTH_FILTER_PERCENTILE)  # Adjust percentile as needed
+            print(f"Depth filter percentile: {depth_filter_percentile}")
+            mask = (depths > 0) & (depths_render > 0) & (depths < depth_filter_percentile)
+        else:
+            mask = (depths > 0) & (depths_render > 0) & (depths < DEPTH_FILTER_MM)
         
         # Apply additional hand mask if provided
         if hand_mask is not None:

@@ -46,6 +46,23 @@ Here's an example taken from the file "demo_rgbk/mug_lots_of_occlusion.npy":
 ### After
 <img src="https://github.com/user-attachments/assets/3865c951-5fc7-4883-a1a0-56671b6ce167" width="300">
 
+## Our installation (Cuda 12.1 / 12.4)
+```bash
+conda create --name wilor python=3.10
+conda activate wilor
+conda install pytorch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 pytorch-cuda=12.1 -c pytorch -c nvidia
+pip install -r requirements.txt
+```
+
+Install GSAM2 within the same conda environment as WiLoR.
+Additional requirements for GSAM2 and visualizations:
+```bash
+pip install -r third_party/Grounded-SAM-2/grounding-dino/requirements.txt
+# Additional requirements from the fork
+pip install open3d
+pip install pyk4a
+```
+
 
 ## Running it
 ```bash
@@ -111,12 +128,9 @@ conda create --name wilor python=3.10
 conda activate wilor
 
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu117
-# Install requirements
-pip install -r grounding-dino/requirements.txt
-# Additional requirements from the fork
-pip install open3d
-pip install pyk4a
+pip install -r requirements.txt
 ```
+
 Download the pretrained models using: 
 ```bash
 wget https://huggingface.co/spaces/rolpotamias/WiLoR/resolve/main/pretrained_models/detector.pt -P ./pretrained_models/
