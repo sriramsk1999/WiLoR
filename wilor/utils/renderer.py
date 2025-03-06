@@ -310,14 +310,9 @@ class Renderer:
 
         # get mean ratio of depth from visible vertices
         color, depths_render = self.render_rgba(vertices, camera_translation, rot_axis=rot_axis, rot=rot_angle, mesh_base_color=mesh_base_color, render_res=img_res, focal_length=focal_length, is_right=is_right, return_depth=True)
-
-        ## Filter out points beyond a certain depth percentile. depth_render acts as a mask (identifies the 2D projected wilor hand) since points outside the mask have depth=0
-        if DEPTH_FILTER_MM is None:
-            depth_filter_percentile = np.percentile(depths[depths > 0], DEPTH_FILTER_PERCENTILE)  # Adjust percentile as needed
-            print(f"Depth filter percentile: {depth_filter_percentile}")
-            mask = (depths > 0) & (depths_render > 0) & (depths < depth_filter_percentile)
-        else:
-            mask = (depths > 0) & (depths_render > 0) & (depths < DEPTH_FILTER_MM)
+        
+        ## depth_render acts as a mask (identifies the 2D projected wilor hand) since points outside the mask have depth=0
+        mask = (depths > 0) & (depths_render > 0)
         
         # Apply additional hand mask if provided
         if hand_mask is not None:
@@ -332,7 +327,7 @@ class Renderer:
             # Convert both masks to boolean numpy arrays
             mask = mask.astype(bool)
             hand_mask = hand_mask.astype(bool)
-            mask = mask & hand_mask
+            mask &= hand_mask
             
             # # Visualize masks before and after
             # import matplotlib.pyplot as plt
@@ -345,6 +340,14 @@ class Renderer:
             # ax2.axis('off')
             # plt.tight_layout()
             # plt.show()
+        
+        ## Filter out points beyond a certain depth percentile.
+        if DEPTH_FILTER_MM is None:
+            depth_filter_percentile = np.percentile(depths[mask], DEPTH_FILTER_PERCENTILE)  # It's the percentile of the depth of the real points that match with the wilor hand
+            print(f"Depth filter percentile: {depth_filter_percentile}")
+            mask &= (depths < depth_filter_percentile)
+        else:
+            mask &= (depths < DEPTH_FILTER_MM)
         
         ratios = np.zeros_like(depths)
         ratios[mask] = depths[mask] / depths_render[mask]
