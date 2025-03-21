@@ -40,6 +40,7 @@ def main():
     parser.add_argument('--input_folder', type=str, required=True)
     parser.add_argument('--rescale_factor', type=float, default=2.0, help='Factor for padding the bbox')
     parser.add_argument('--no_gsam2', action='store_true', help='Disable GSAM2 hand masking')
+    parser.add_argument('--visualize', action='store_true', default=False)
 
     args = parser.parse_args()
 
@@ -62,6 +63,8 @@ def main():
         gsam2 = GSAM2(device=device, output_dir=Path('.'), debug=False)
 
     root = zarr.group(args.input_folder)
+    RGB_KEY, DEPTH_KEY, CAM_KEY = "_rgb_image_rect", "_depth_registered_image_rect", "_rgb_camera_info"
+    visualize = args.visualize
 
     for demo_name in tqdm(root.keys()):
         demo = root[demo_name]
@@ -69,11 +72,11 @@ def main():
             continue # robot demo
 
         if "_rgb_image_rect" not in demo.keys():
-            continue # old demo
+            continue # old demo, not being used anymore.
 
-        rgb_images = np.asarray(demo["_rgb_image_rect"]["img"])
-        depth_images = np.asarray(demo["_depth_registered_image_rect"]["img"])
-        K = np.asarray(demo["_rgb_camera_info"]["k"])[0]
+        rgb_images = np.asarray(demo[RGB_KEY]["img"])
+        depth_images = np.asarray(demo[DEPTH_KEY]["img"])
+        K = np.asarray(demo[CAM_KEY]["k"])[0]
 
         # Same height and width
         assert rgb_images.shape[1:3] == depth_images.shape[1:3]
@@ -93,7 +96,8 @@ def main():
                 is_right.append(det.boxes.cls.cpu().detach().squeeze().item())
                 bboxes.append(Bbox[:4].tolist())
 
-            if len(bboxes) == 0:
+            # We only continue if we have *one* *right* hand detected.
+            if len(bboxes) != 1 and is_right[0] != True:
                 demo_verts.append(np.zeros((778, 3)))
                 continue
 
@@ -150,12 +154,10 @@ def main():
                 hand_mask=hand_mask,
             )
 
-            if False: # viz
-                os.makedirs("viz", exist_ok=True)
-                pcd1 = o3d.geometry.PointCloud()
-                pcd1.points = o3d.utility.Vector3dVector(verts)
-                pcd2 = o3d.geometry.PointCloud()
-                pcd2.points = o3d.utility.Vector3dVector(tmesh.vertices)
+            if visualize:
+                os.makedirs(f"scaled_hand_viz/{demo_name}", exist_ok=True)
+                hand_pcd = o3d.geometry.PointCloud()
+                hand_pcd.points = o3d.utility.Vector3dVector(tmesh.vertices)
 
                 rgb_o3d = o3d.geometry.Image(img.astype(np.uint8))
                 depth_o3d = o3d.geometry.Image(depth.astype(np.float32))
@@ -165,13 +167,13 @@ def main():
                 intrinsic = o3d.camera.PinholeCameraIntrinsic()
                 intrinsic.intrinsic_matrix = K
                 scene_pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, intrinsic)
-                o3d.io.write_point_cloud(f"viz/{idx}_pcd1.ply", pcd1)
-                o3d.io.write_point_cloud(f"viz/{idx}_pcd2.ply", pcd2)
-                o3d.io.write_point_cloud(f"viz/{idx}_scene_pcd.ply", scene_pcd)
+                o3d.io.write_point_cloud(f"scaled_hand_viz/{demo_name}/{idx}_hand_pcd.ply", hand_pcd)
+                o3d.io.write_point_cloud(f"scaled_hand_viz/{demo_name}/{idx}_scene_pcd.ply", scene_pcd)
 
             demo_verts.append(tmesh.vertices)
 
         demo_verts = np.array(demo_verts)
+        # Store as gripper_pos in the zarr
         demo.create_dataset('gripper_pos', data=demo_verts)
 
 def project_full_img(points, cam_trans, K):
