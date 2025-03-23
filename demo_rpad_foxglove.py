@@ -97,7 +97,7 @@ def main():
                 bboxes.append(Bbox[:4].tolist())
 
             # We only continue if we have *one* *right* hand detected.
-            if len(bboxes) != 1 and is_right[0] != True:
+            if len(bboxes) != 1 or not is_right[0]:
                 demo_verts.append(np.zeros((778, 3)))
                 continue
 
@@ -169,6 +169,9 @@ def main():
                 scene_pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, intrinsic)
                 o3d.io.write_point_cloud(f"scaled_hand_viz/{demo_name}/{idx}_hand_pcd.ply", hand_pcd)
                 o3d.io.write_point_cloud(f"scaled_hand_viz/{demo_name}/{idx}_scene_pcd.ply", scene_pcd)
+
+            if tmesh.vertices.shape[0] == 0:
+                tmesh.vertices = np.zeros((778, 3))
 
             demo_verts.append(tmesh.vertices)
 
