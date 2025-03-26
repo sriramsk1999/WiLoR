@@ -1,7 +1,3 @@
-Some minor changes on top of [jacintosuner/wilor](https://github.com/jacintosuner/wilor)
-
-- `demo_rpad_foxglove.py` runs WiLoR and scales it according to input depth using GSAM
-
 <div align="center">
 
 # Scaling for better 3D Alignment

@@ -74,6 +74,9 @@ def main():
         if "_rgb_image_rect" not in demo.keys():
             continue # old demo, not being used anymore.
 
+        if visualize:
+            os.makedirs(f"scaled_hand_viz/{demo_name}", exist_ok=True)
+
         rgb_images = np.asarray(demo[RGB_KEY]["img"])
         depth_images = np.asarray(demo[DEPTH_KEY]["img"])
         K = np.asarray(demo[CAM_KEY]["k"])[0]
@@ -99,6 +102,9 @@ def main():
             # We only continue if we have *one* *right* hand detected.
             if len(bboxes) != 1 or not is_right[0]:
                 demo_verts.append(np.zeros((778, 3)))
+                if visualize:
+                    plt.imsave(f"scaled_hand_viz/{demo_name}/{str(idx).zfill(5)}.png", img)
+                    plt.imsave(f"scaled_hand_viz/{demo_name}/mask_{str(idx).zfill(5)}.png", np.zeros_like(img))
                 continue
 
             boxes = np.stack(bboxes)
@@ -134,7 +140,7 @@ def main():
             camera_translation = cam_t.copy()
 
             # Get hand mask if GSAM2 is enabled
-            hand_mask = None
+            hand_mask = np.zeros_like(img)
             if gsam2 is not None:
                 # Use "hand" as the object to detect
                 masks, scores, _, _, _, _ = gsam2.get_masks_image("hand", img)
@@ -154,8 +160,10 @@ def main():
                 hand_mask=hand_mask,
             )
 
+            if tmesh.vertices.shape[0] == 0:
+                tmesh.vertices = np.zeros((778, 3))
+
             if visualize:
-                os.makedirs(f"scaled_hand_viz/{demo_name}", exist_ok=True)
                 hand_pcd = o3d.geometry.PointCloud()
                 hand_pcd.points = o3d.utility.Vector3dVector(tmesh.vertices)
 
@@ -170,8 +178,11 @@ def main():
                 o3d.io.write_point_cloud(f"scaled_hand_viz/{demo_name}/{idx}_hand_pcd.ply", hand_pcd)
                 o3d.io.write_point_cloud(f"scaled_hand_viz/{demo_name}/{idx}_scene_pcd.ply", scene_pcd)
 
-            if tmesh.vertices.shape[0] == 0:
-                tmesh.vertices = np.zeros((778, 3))
+                key_y = np.clip(kpts_2d[:,1].astype(int), 0, img.shape[0]-1)
+                key_x = np.clip(kpts_2d[:,0].astype(int), 0, img.shape[1]-1)
+                img[key_y, key_x] = (0, 0, 255)
+                plt.imsave(f"scaled_hand_viz/{demo_name}/{str(idx).zfill(5)}.png", img)
+                plt.imsave(f"scaled_hand_viz/{demo_name}/mask_{str(idx).zfill(5)}.png", hand_mask)
 
             demo_verts.append(tmesh.vertices)
 
