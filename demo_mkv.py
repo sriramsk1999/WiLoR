@@ -108,7 +108,7 @@ def process_frame(frame_rgb, frame_depth, K, model, model_cfg, detector, rendere
                             mask_overlay
                         )
             
-            # Save 2D keypoint visualization if requested
+            # Save 2D keypoints visualization if requested
             if save_path is not None and save_2d:
                 vis_img = img_cv2.copy()
                 # Draw 2D keypoints
@@ -142,8 +142,32 @@ def process_frame(frame_rgb, frame_depth, K, model, model_cfg, detector, rendere
             all_right.append(is_right)
             all_joints.append(joints)
             all_kpts.append(kpts_2d)
-    
-    return all_verts, all_cam_t, all_right, all_joints, all_kpts, img_size[0]
+
+    # Render final visualization after all hands have been processed
+    if save_path is not None and len(all_verts) > 0:
+        # Render visualization
+        misc_args = dict(
+            mesh_base_color=LIGHT_PURPLE,
+            scene_bg_color=(1, 1, 1),
+            focal_length=K[0, 0],
+        )
+        cam_view = renderer.render_rgba_multiple(
+            all_verts, cam_t=all_cam_t, 
+            render_res=img_size[0],  # Use first image size since they should all be the same
+            is_right=all_right, 
+            **misc_args
+        )
+
+        # Create overlay
+        input_img = img_cv2.astype(np.float32)/255.0
+        input_img = np.concatenate([input_img, np.ones_like(input_img[:,:,:1])], axis=2)
+        input_img_overlay = input_img[:,:,:3] * (1-cam_view[:,:,3:]) + cam_view[:,:,:3] * cam_view[:,:,3:]
+        
+        # Save visualization
+        cv2.imwrite(
+            os.path.join(save_path, 'rendered', f'frame_{frame_idx}.jpg'),
+            255*input_img_overlay[:, :, ::-1]
+        )
 
 def project_full_img(points, cam_trans, K):
     points = points + cam_trans
@@ -157,14 +181,15 @@ def main():
     parser.add_argument('--video_path', type=str, required=True, help='Path to input MKV video')
     parser.add_argument('--save_mesh', action='store_true', default=False, help='Save hand meshes')
     parser.add_argument('--save_mask', action='store_true', default=False, help='Save hand mask visualization')
-    parser.add_argument('--save_2d', action='store_true', default=False, help='Save 2D keypoint visualization')
+    parser.add_argument('--save_2d', action='store_true', default=False, help='Save 2D keypoint and mesh visualization')
     parser.add_argument('--rescale_factor', type=float, default=2.0, help='Factor for padding the bbox')
     parser.add_argument('--no_gsam2', action='store_true', help='Disable GSAM2 hand masking')
     args = parser.parse_args()
 
     # Setup output directories
     video_dir = str(Path(args.video_path).parent)
-    os.makedirs(os.path.join(video_dir, 'rendered'), exist_ok=True)
+    if args.save_mask or args.save_2d:
+        os.makedirs(os.path.join(video_dir, 'rendered'), exist_ok=True)
     if args.save_mesh:
         os.makedirs(os.path.join(video_dir, 'meshes'), exist_ok=True)
 
@@ -206,7 +231,7 @@ def main():
                 continue
             
             # Process frame
-            results = process_frame(
+            process_frame(
                 rgb_frame, depth_frame, calibration,
                 model, model_cfg, detector, renderer, device,
                 rescale_factor=args.rescale_factor,
@@ -215,37 +240,6 @@ def main():
                 frame_idx=frame_idx,
                 save_mask=args.save_mask,
                 save_2d=args.save_2d
-            )
-            
-            if results is None:
-                frame_idx += 1
-                pbar.update(1)
-                continue
-                
-            all_verts, all_cam_t, all_right, all_joints, all_kpts, img_size = results
-            
-            # Render visualization
-            misc_args = dict(
-                mesh_base_color=LIGHT_PURPLE,
-                scene_bg_color=(1, 1, 1),
-                focal_length=calibration[0, 0],
-            )
-            cam_view = renderer.render_rgba_multiple(
-                all_verts, cam_t=all_cam_t, 
-                render_res=img_size, 
-                is_right=all_right, 
-                **misc_args
-            )
-
-            # Create overlay
-            input_img = rgb_frame.astype(np.float32)/255.0
-            input_img = np.concatenate([input_img, np.ones_like(input_img[:,:,:1])], axis=2)
-            input_img_overlay = input_img[:,:,:3] * (1-cam_view[:,:,3:]) + cam_view[:,:,:3] * cam_view[:,:,3:]
-            
-            # Save visualization
-            cv2.imwrite(
-                os.path.join(video_dir, 'rendered', f'frame_{frame_idx}.jpg'),
-                255*input_img_overlay[:, :, ::-1]
             )
             
             frame_idx += 1

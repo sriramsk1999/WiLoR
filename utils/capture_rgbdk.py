@@ -10,7 +10,7 @@ from pyk4a.calibration import CalibrationType
 # python3 utils/capture_rgbdk.py --output_path ./demo_rgbdk/ --to_images
 # rsync -r --progress ~/robot-grasp/data/rgbdks/rgbdk.npy jacinto@ham1.pc.cs.cmu.edu:/home/jacinto/robot-grasp/data/rgbdks
 
-def capture_rgbd(output_path, to_images, name, device_id=0):
+def capture_rgbdk(output_path, to_images, name, device_id=0):
     # Create a output_path if it doesn't exist
     if not os.path.exists(output_path):
         os.makedirs(output_path)
@@ -75,4 +75,4 @@ if __name__ == "__main__":
     parser.add_argument('--device_id', type=int, default=0, help='Device ID of the Azure Kinect camera')
 
     args = parser.parse_args()
-    capture_rgbd(args.output_path, args.to_images, args.name, args.device_id)
+    capture_rgbdk(args.output_path, args.to_images, args.name, args.device_id)
