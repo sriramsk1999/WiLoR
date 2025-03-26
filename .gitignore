@@ -3,6 +3,8 @@
 /pretrained_models/wilor_final.ckpt
 /mano_data/MANO_RIGHT.pkl
 /demo_out
+/demo_vid
+*.pyc  # Explicitly ignore .pyc files
 
 ### Git ###
 # Created by git for backups. To disable backups in Git:
