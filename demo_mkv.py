@@ -9,7 +9,7 @@
     python demo_mkv.py --video_path path/to/video.mkv --save_mesh --save_mask --save_2d
     
     To disable GSAM2 hand masking:
-    python demo_mkv.py --video_path path/to/video.mkv --save_mesh --no_gsam2
+    python demo_mkv.py --video_path path/to/video.mkv --save_mesh --save_mask --save_2d --no_gsam2 
 """
 
 from pathlib import Path
