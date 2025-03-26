@@ -46,6 +46,20 @@ Here's an example taken from the file "demo_rgbk/mug_lots_of_occlusion.npy":
 ### After
 <img src="https://github.com/user-attachments/assets/3865c951-5fc7-4883-a1a0-56671b6ce167" width="300">
 
+## Model weights, submodules and mano hand model
+```bash
+wget https://huggingface.co/spaces/rolpotamias/WiLoR/resolve/main/pretrained_models/detector.pt -P ./pretrained_models/
+wget https://huggingface.co/spaces/rolpotamias/WiLoR/resolve/main/pretrained_models/wilor_final.ckpt -P ./pretrained_models/
+```
+
+```bash
+git submodule update --init --recursive
+```
+
+It is also required to download MANO model from [MANO website](https://mano.is.tue.mpg.de). 
+Create an account by clicking Sign Up and download the models (mano_v*_*.zip). Unzip and place the right hand model `MANO_RIGHT.pkl` under the `mano_data/` folder. 
+Note that MANO model falls under the [MANO license](https://mano.is.tue.mpg.de/license.html).
+
 ## Our installation (Cuda 12.1 / 12.4)
 ```bash
 conda create --name wilor python=3.10
@@ -63,6 +77,14 @@ pip install open3d
 pip install pyk4a
 ```
 
+## Further installation instructions
+Download GSAM2 model weights:
+```bash
+cd third_party/Grounded-SAM-2/checkpoints
+bash download_ckpts.sh
+cd ../gdino_checkpoints
+bash download_ckpts.sh
+```
 
 ## Running it
 ```bash
