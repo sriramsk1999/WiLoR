@@ -179,7 +179,8 @@ def project_full_img(points, cam_trans, K):
 def main():
     parser = argparse.ArgumentParser(description='Process MKV video for hand pose estimation')
     parser.add_argument('--video_path', type=str, required=True, help='Path to input MKV video')
-    parser.add_argument('--use_depth_npy', action='store_true', help='Use depth.npy file from video directory instead of MKV depth')
+    parser.add_argument('--use_gt_depth_npy', action='store_true', help='Use depth.npy file from video directory instead of MKV depth')
+    parser.add_argument('--use_pred_depth_npy', action='store_true', help='Use depth_pred.npy file from video directory instead of MKV depth')
     parser.add_argument('--save_mesh', action='store_true', default=False, help='Save hand meshes')
     parser.add_argument('--save_mask', action='store_true', default=False, help='Save hand mask visualization')
     parser.add_argument('--save_2d', action='store_true', default=False, help='Save 2D keypoint and mesh visualization')
@@ -219,13 +220,20 @@ def main():
     
     # Check for external depth file if requested
     external_depth = None
-    if args.use_depth_npy:
-        depth_path = os.path.join(os.path.dirname(args.video_path), 'depths.npy')
+    if args.use_gt_depth_npy:
+        depth_path = os.path.join(os.path.dirname(args.video_path), 'depth.npy')
         if os.path.exists(depth_path):
             external_depth = np.load(depth_path)
-            print(f"Loaded external depth from {depth_path}")
+            print(f"Loaded ground truth depth from {depth_path}")
         else:
-            print(f"Warning: depths.npy not found at {depth_path}, falling back to MKV depth")
+            print(f"Warning: depth.npy not found at {depth_path}, falling back to MKV depth")
+    elif args.use_pred_depth_npy:
+        depth_path = os.path.join(os.path.dirname(args.video_path), 'depth_pred.npy')
+        if os.path.exists(depth_path):
+            external_depth = np.load(depth_path)
+            print(f"Loaded predicted depth from {depth_path}")
+        else:
+            print(f"Warning: depth_pred.npy not found at {depth_path}, falling back to MKV depth")
     
     frame_idx = 0
     pbar = tqdm(desc="Processing frames")
