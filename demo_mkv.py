@@ -39,8 +39,8 @@ def process_frame(frame_rgb, frame_depth, K, model, model_cfg, detector, rendere
                  save_mask=False, save_2d=False):
     """Process a single frame and return/save the results"""
     
-    # Convert BGR to RGB
-    img_cv2 = cv2.cvtColor(frame_rgb, cv2.COLOR_BGR2RGB)
+    # Convert RGB to BGR for consistent processing
+    img_cv2 = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
     
     # Run hand detection
     detections = detector(img_cv2, conf=0.3, verbose=False)[0]
@@ -101,8 +101,8 @@ def process_frame(frame_rgb, frame_depth, K, model, model_cfg, detector, rendere
                     
                     # Save mask visualization if requested
                     if save_path is not None:
-                        mask_overlay = img_cv2.copy()
-                        mask_overlay[hand_mask] = mask_overlay[hand_mask] * 0.6 + np.array(LIGHT_PURPLE) * 255 * 0.4
+                        mask_overlay = img_cv2.copy()  # Already in BGR format
+                        mask_overlay[hand_mask] = mask_overlay[hand_mask] * 0.6 + np.array(LIGHT_PURPLE)[::-1] * 255 * 0.4  # Convert LIGHT_PURPLE to BGR
                         cv2.imwrite(
                             os.path.join(save_path, 'rendered', f'frame_{frame_idx}_gsam2_mask.jpg'),
                             mask_overlay
@@ -118,7 +118,7 @@ def process_frame(frame_rgb, frame_depth, K, model, model_cfg, detector, rendere
                         cv2.circle(vis_img, (x, y), 2, (0, 255, 0), -1)
                 cv2.imwrite(
                     os.path.join(save_path, 'rendered', f'frame_{frame_idx}_keypoints.jpg'),
-                    vis_img[:, :, ::-1]  # Convert RGB to BGR for OpenCV
+                    vis_img  # Already in BGR format
                 )
             
             # Save mesh if requested
@@ -159,14 +159,14 @@ def process_frame(frame_rgb, frame_depth, K, model, model_cfg, detector, rendere
         )
 
         # Create overlay
-        input_img = img_cv2.astype(np.float32)/255.0
+        input_img = cv2.cvtColor(img_cv2, cv2.COLOR_BGR2RGB).astype(np.float32)/255.0  # Convert BGR to RGB for overlay
         input_img = np.concatenate([input_img, np.ones_like(input_img[:,:,:1])], axis=2)
         input_img_overlay = input_img[:,:,:3] * (1-cam_view[:,:,3:]) + cam_view[:,:,:3] * cam_view[:,:,3:]
         
-        # Save visualization
+        # Save visualization (convert RGB back to BGR)
         cv2.imwrite(
             os.path.join(save_path, 'rendered', f'frame_{frame_idx}.jpg'),
-            255*input_img_overlay[:, :, ::-1]
+            255*cv2.cvtColor(input_img_overlay, cv2.COLOR_RGB2BGR)
         )
 
 def project_full_img(points, cam_trans, K):
@@ -179,6 +179,7 @@ def project_full_img(points, cam_trans, K):
 def main():
     parser = argparse.ArgumentParser(description='Process MKV video for hand pose estimation')
     parser.add_argument('--video_path', type=str, required=True, help='Path to input MKV video')
+    parser.add_argument('--use_depth_npy', action='store_true', help='Use depth.npy file from video directory instead of MKV depth')
     parser.add_argument('--save_mesh', action='store_true', default=False, help='Save hand meshes')
     parser.add_argument('--save_mask', action='store_true', default=False, help='Save hand mask visualization')
     parser.add_argument('--save_2d', action='store_true', default=False, help='Save 2D keypoint and mesh visualization')
@@ -216,6 +217,16 @@ def main():
     # Get calibration
     calibration = playback.calibration.get_camera_matrix(CalibrationType.COLOR)
     
+    # Check for external depth file if requested
+    external_depth = None
+    if args.use_depth_npy:
+        depth_path = os.path.join(os.path.dirname(args.video_path), 'depths.npy')
+        if os.path.exists(depth_path):
+            external_depth = np.load(depth_path)
+            print(f"Loaded external depth from {depth_path}")
+        else:
+            print(f"Warning: depths.npy not found at {depth_path}, falling back to MKV depth")
+    
     frame_idx = 0
     pbar = tqdm(desc="Processing frames")
     
@@ -224,8 +235,15 @@ def main():
             capture = playback.get_next_capture()
             
             # Get RGB and depth frames
-            rgb_frame = capture.color[:, :, :3][:, :, ::-1]  # BGR format
-            depth_frame = capture.transformed_depth
+            rgb_frame = capture.color[:, :, :3][:, :, ::-1]  # BGR to RGB format
+            if external_depth is not None:
+                if frame_idx < external_depth.shape[0]:
+                    depth_frame = external_depth[frame_idx]
+                else:
+                    print(f"\nWarning: Frame {frame_idx} exceeds available depth frames ({external_depth.shape[0]})")
+                    break
+            else:
+                depth_frame = capture.transformed_depth
             
             if rgb_frame is None or depth_frame is None:
                 continue

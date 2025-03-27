@@ -70,7 +70,7 @@ def main():
     for npy_path in npy_paths:
         data = np.load(npy_path, allow_pickle=True)
         data = data.item()
-        img_cv2 = cv2.cvtColor(data['rgb'], cv2.COLOR_BGR2RGB)
+        img_cv2 = cv2.cvtColor(data['rgb'], cv2.COLOR_RGB2BGR)  # Convert RGB to BGR to match demo.py's processing
         K = data['K']
         detections = detector(img_cv2, conf = 0.3, verbose=False)[0]
         bboxes    = []
@@ -165,10 +165,11 @@ def main():
             cam_view = renderer.render_rgba_multiple(all_verts, cam_t=all_cam_t, render_res=img_size[n], is_right=all_right, **misc_args)
 
             # Overlay image
-            input_img = img_cv2.astype(np.float32)[:,:,::-1]/255.0
+            input_img = img_cv2.astype(np.float32)[:,:,::-1]/255.0  # Convert BGR to RGB for overlay
             input_img = np.concatenate([input_img, np.ones_like(input_img[:,:,:1])], axis=2) # Add alpha channel
             input_img_overlay = input_img[:,:,:3] * (1-cam_view[:,:,3:]) + cam_view[:,:,:3] * cam_view[:,:,3:]
 
+            # Convert back to BGR for saving
             cv2.imwrite(os.path.join(args.out_folder, f'{img_fn}.jpg'), 255*input_img_overlay[:, :, ::-1])
         
         # Create mask overlay visualization if GSAM2 was used
@@ -176,9 +177,9 @@ def main():
             if masks is not None and len(masks) > 0:
                 # Create visualization with mask overlay
                 hand_mask = masks[0][0].astype(bool)  # Explicitly convert to boolean
-                mask_overlay = img_cv2.copy()
-                mask_overlay[hand_mask] = mask_overlay[hand_mask] * 0.6 + np.array(LIGHT_PURPLE) * 0.4
-                # Save visualization
+                mask_overlay = img_cv2.copy()  # Already in BGR format
+                mask_overlay[hand_mask] = mask_overlay[hand_mask] * 0.6 + np.array(LIGHT_PURPLE)[::-1] * 0.4  # Convert LIGHT_PURPLE to BGR
+                # Already in BGR format, save directly
                 cv2.imwrite(os.path.join(args.out_folder, f'{img_fn}_gsam2_mask.jpg'), mask_overlay)
         
 
