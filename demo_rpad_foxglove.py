@@ -35,6 +35,38 @@ from gsam_wrapper import GSAM2
 
 LIGHT_PURPLE=(0.25098039, 0.274117647, 0.65882353)
 
+
+def infill_hand_verts(demo_name, seq):
+    """
+    Interpolate hole frames in a sequence of point clouds.
+    """
+    T = seq.shape[0]
+    valid_mask = np.array([np.mean(np.abs(frame)) != 0 for frame in seq])
+
+    hole_idxs = np.where(~valid_mask)[0]
+    groups = []
+    group = [hole_idxs[0]]
+    for idx in hole_idxs[1:]:
+        if idx == group[-1] + 1:
+            group.append(idx)
+        else:
+            groups.append(group)
+            group = [idx]
+    groups.append(group)
+
+    for group in groups:
+        start_hole = group[0]
+        end_hole = group[-1]
+        if start_hole - 1 >= 0 and end_hole + 1 < T:
+            if valid_mask[start_hole - 1] and valid_mask[end_hole + 1]:
+                frame_before = seq[start_hole - 1]
+                frame_after  = seq[end_hole + 1]
+                num_steps = len(group) + 1
+                for i, idx in enumerate(range(start_hole, end_hole + 1)):
+                    alpha = (i + 1) / num_steps
+                    seq[idx] = (1 - alpha) * frame_before + alpha * frame_after
+    return seq
+
 def main():
     parser = argparse.ArgumentParser(description='WiLoR demo code')
     parser.add_argument('--input_folder', type=str, required=True)
@@ -74,6 +106,12 @@ def main():
         if "_rgb_image_rect" not in demo.keys():
             continue # old demo, not being used anymore.
 
+
+        if "gripper_pos" in demo.keys():
+            # del demo["gripper_pos"]
+            # Already generated
+            continue
+
         if visualize:
             os.makedirs(f"scaled_hand_viz/{demo_name}", exist_ok=True)
 
@@ -87,7 +125,7 @@ def main():
         num_images = min(rgb_images.shape[0], depth_images.shape[0])
         demo_verts = []
 
-        for idx in range(num_images):
+        for idx in tqdm(range(num_images)):
             img = rgb_images[idx]
             depth = depth_images[idx].squeeze() / 1000.
 
@@ -140,7 +178,7 @@ def main():
             camera_translation = cam_t.copy()
 
             # Get hand mask if GSAM2 is enabled
-            hand_mask = np.zeros_like(img)
+            hand_mask = np.zeros((img.shape[0],img.shape[1]))
             if gsam2 is not None:
                 # Use "hand" as the object to detect
                 masks, scores, _, _, _, _ = gsam2.get_masks_image("hand", img)
@@ -187,6 +225,8 @@ def main():
             demo_verts.append(tmesh.vertices)
 
         demo_verts = np.array(demo_verts)
+        demo_verts = infill_hand_verts(demo_name, demo_verts)
+
         # Store as gripper_pos in the zarr
         demo.create_dataset('gripper_pos', data=demo_verts)
 
