@@ -72,8 +72,11 @@ def infill_hand_verts(demo_name, seq):
     """
     T = seq.shape[0]
     valid_mask = np.array([np.mean(np.abs(frame)) != 0 for frame in seq])
-
     hole_idxs = np.where(~valid_mask)[0]
+
+    if hole_idxs.size == 0:
+        return seq
+
     groups = []
     group = [hole_idxs[0]]
     for idx in hole_idxs[1:]:
@@ -125,17 +128,12 @@ def main():
         gsam2 = GSAM2(device=device, output_dir=Path('.'), debug=False)
 
     root = zarr.group(args.input_folder)
-    RGB_KEY, DEPTH_KEY, CAM_KEY = "_rgb_image_rect", "_depth_registered_image_rect", "_rgb_camera_info"
     visualize = args.visualize
 
     for demo_name in tqdm(root.keys()):
         demo = root[demo_name]
-        if "_puppet_right_joint_states" in demo.keys() or "_follower_right_joint_states" in demo.keys():
+        if "follower_right" in demo["raw"]:
             continue # robot demo
-
-        if "_rgb_image_rect" not in demo.keys():
-            continue # old demo, not being used anymore.
-
 
         if "gripper_pos" in demo.keys():
             # del demo["gripper_pos"]
@@ -145,11 +143,11 @@ def main():
         if visualize:
             os.makedirs(f"scaled_hand_viz/{demo_name}", exist_ok=True)
 
-        rgb_images = np.asarray(demo[RGB_KEY]["img"])
-        rgb_ts = np.asarray(demo[RGB_KEY]["ts"])
-        depth_images = np.asarray(demo[DEPTH_KEY]["img"])
-        depth_ts = np.asarray(demo[DEPTH_KEY]["ts"])
-        K = np.asarray(demo[CAM_KEY]["k"])[0]
+        rgb_images = np.asarray(demo["raw"]["rgb"]["image_rect"]["img"])
+        rgb_ts = np.asarray(demo["raw"]["rgb"]["image_rect"]["ts"])
+        depth_images = np.asarray(demo["raw"]["depth_registered"]["image_rect"]["img"])
+        depth_ts = np.asarray(demo["raw"]["depth_registered"]["image_rect"]["ts"])
+        K = np.asarray(demo["raw"]["rgb"]["camera_info"]["k"])[0]
 
         # Same height and width
         assert rgb_images.shape[1:3] == depth_images.shape[1:3]
