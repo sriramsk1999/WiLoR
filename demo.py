@@ -109,6 +109,8 @@ def main():
                     tmesh = renderer.vertices_to_trimesh(verts, camera_translation, LIGHT_PURPLE, is_right=is_right)
                     tmesh.export(os.path.join(args.out_folder, f'{img_fn}_{n}.obj'))
 
+        np.save(os.path.join(args.out_folder, f'{img_fn}.npy'), np.array(all_joints))
+
         # Render front view
         if len(all_verts) > 0:
             misc_args = dict(
