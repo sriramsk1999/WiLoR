@@ -230,7 +230,8 @@ def main():
                 hand_mask=hand_mask,
             )
 
-            if tmesh.vertices.shape[0] == 0:
+            # Could be 0, could be 777 for some reason on one instance?
+            if tmesh.vertices.shape[0] != 778:
                 tmesh.vertices = np.zeros((778, 3))
 
             if visualize:
