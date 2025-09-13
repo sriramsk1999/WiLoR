@@ -106,7 +106,7 @@ def load_wilor_hand_poses(base_dir, dset_name, video_index):
     return hand_poses
 
 
-def visualize_lerobot_sequence(dset_name, video_index, intrinsics_path, base_dir, web):
+def visualize_lerobot_sequence(dset_name, video_index, intrinsics_path, base_dir, web, minimal):
     if web:
         rr.init("LeRobot_Visualization", spawn=False)
         rr.serve(open_browser=False, web_port=9090, ws_port=9877)
@@ -144,12 +144,14 @@ def visualize_lerobot_sequence(dset_name, video_index, intrinsics_path, base_dir
         v_indices, u_indices = np.where(valid_mask)
         colors = rgb_frame[v_indices, u_indices] / 255.0
         # Log 3D point cloud
-        rr.log("world/pointcloud", rr.Points3D(points_3d, colors=colors))
+        if not minimal:
+            rr.log("world/pointcloud", rr.Points3D(points_3d, colors=colors))
         
         wilor_pose_frame = wilor_poses[frame_idx]
 
         # Log wilor hand poses in blue (no scaling needed - already done in demo_lerobot.py)
-        rr.log("world/hand/wilor", rr.Points3D(wilor_pose_frame, colors=[0.0, 0.0, 1.0]))
+        if not minimal:
+            rr.log("world/hand/wilor", rr.Points3D(wilor_pose_frame, colors=[0.0, 0.0, 1.0]))
 
         # Project wilor hand poses to 2D using RGB camera intrinsics
         wilor_projected = project_3d_to_2d(wilor_pose_frame, intrinsics)
@@ -167,6 +169,7 @@ def visualize_lerobot_sequence(dset_name, video_index, intrinsics_path, base_dir
         for point in wilor_valid_projected:
             x, y = int(point[0]), int(point[1])
             cv2.circle(rgb_with_overlay, (x, y), 2, (0, 0, 255), -1)  # Blue circles
+        if minimal: rgb_with_overlay = cv2.resize(rgb_with_overlay, (0,0), fx=0.25, fy=0.25)
         rr.log("world/camera/rgb_with_overlay", rr.Image(rgb_with_overlay))
         
     print("Visualization complete! Check the Rerun viewer.")
@@ -182,10 +185,11 @@ def main():
     parser.add_argument("--intrinsics", default="aloha_intrinsics.txt", help="Path to camera intrinsics file")
     parser.add_argument("--wilor_pose_dir", default="/data/sriram/lerobot_extradata", help="Path to wilor hand pose directory")
     parser.add_argument("--web", default=False, action="store_true", help="Enable web viz")
+    parser.add_argument("--minimal", default=False, action="store_true", help="minimal viz")
 
     args = parser.parse_args()
     
-    visualize_lerobot_sequence(args.dset_name, args.video_index, args.intrinsics, args.wilor_pose_dir, args.web)
+    visualize_lerobot_sequence(args.dset_name, args.video_index, args.intrinsics, args.wilor_pose_dir, args.web, args.minimal)
 
 
 if __name__ == "__main__":
