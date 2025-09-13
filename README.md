@@ -73,7 +73,7 @@ pip install -v -e third_party/ViTPose
 Install GSAM2 within the same conda environment as WiLoR.
 Additional requirements for GSAM2 and visualizations:
 ```bash
-pip install -r third_party/Grounded-SAM-2/grounding-dino/requirements.txt
+pip install -r third_party/Grounded-SAM-2/grounding_dino/requirements.txt
 # Additional requirements from the fork
 pip install open3d
 pip install pyk4a

@@ -38,6 +38,9 @@ from detectron2.config import get_cfg
 from detectron2.utils.visualizer import Visualizer
 from detectron2.data import MetadataCatalog
 
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+
 LIGHT_PURPLE=(0.25098039, 0.274117647, 0.65882353)
 
 def load_detectron2_predictor():
