@@ -62,11 +62,14 @@ Note that MANO model falls under the [MANO license](https://mano.is.tue.mpg.de/l
 
 ## Our installation (Cuda 12.1 / 12.4)
 ```bash
+git submodule update --init --recursive
+
 conda create --name wilor python=3.10
 conda activate wilor
 conda install pytorch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 pytorch-cuda=12.1 -c pytorch -c nvidia
 conda install nvidia/label/cuda-12.1.0::cuda-toolkit -c nvidia/label/cuda-12.1.0 -y
 pip install -r requirements.txt
+pip install -v -e third-party/ViTPose
 ```
 
 Install GSAM2 within the same conda environment as WiLoR.
@@ -87,10 +90,26 @@ cd ../gdino_checkpoints
 bash download_ckpts.sh
 ```
 
+## Detectron2 and VitPose
+
+Borrowed from HAPTIC
+
+``` bash
+mkdir -p output/vitpose_ckpts/vitpose+_huge
+
+# Download the wholebody model (133 keypoints including hands)
+# From: https://1drv.ms/u/s!AimBgYV7JjTlgccoXv8rCUgVe7oD9Q?e=ZBw6gR
+# You'll need to download this manually and place it at:
+# output/vitpose_ckpts/vitpose+_huge/wholebody.pth
+```
+
 ## Running it
 ```bash
 python demo_rgbdk.py --npy_folder demo_rgbdk --out_folder demo_out --save_mesh
 python demo_rgbdk.py --npy_folder demo_rgbdk --out_folder demo_out --save_mesh --no_gsam2
+
+
+python demo_lerobot_detectron2.py --input_folder "/home/sriram/.cache/huggingface/lerobot/sriramsk/mug_on_platform_20250910_human/videos/chunk-000/" --output_folder "/data/sriram/lerobot_extradata/sriramsk/mug_on_platform_20250910_human/wilor_hand_pose" --visualize
 ```
 
 ## Visualizations
