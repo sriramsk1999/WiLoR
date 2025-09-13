@@ -1,6 +1,6 @@
 [submodule "third_party/Grounded-SAM-2"]
 	path = third_party/Grounded-SAM-2
 	url = https://github.com/jacintosuner/Grounded-SAM-2.git
-[submodule "third-party/ViTPose"]
-	path = third-party/ViTPose
+[submodule "third_party/ViTPose"]
+	path = third_party/ViTPose
 	url = https://github.com/ViTAE-Transformer/ViTPose.git

@@ -62,14 +62,12 @@ Note that MANO model falls under the [MANO license](https://mano.is.tue.mpg.de/l
 
 ## Our installation (Cuda 12.1 / 12.4)
 ```bash
-git submodule update --init --recursive
-
 conda create --name wilor python=3.10
 conda activate wilor
 conda install pytorch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 pytorch-cuda=12.1 -c pytorch -c nvidia
 conda install nvidia/label/cuda-12.1.0::cuda-toolkit -c nvidia/label/cuda-12.1.0 -y
 pip install -r requirements.txt
-pip install -v -e third-party/ViTPose
+pip install -v -e third_party/ViTPose
 ```
 
 Install GSAM2 within the same conda environment as WiLoR.
