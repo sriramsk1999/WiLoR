@@ -65,6 +65,7 @@ Note that MANO model falls under the [MANO license](https://mano.is.tue.mpg.de/l
 conda create --name wilor python=3.10
 conda activate wilor
 conda install pytorch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 pytorch-cuda=12.1 -c pytorch -c nvidia
+conda install nvidia/label/cuda-12.1.0::cuda-toolkit -c nvidia/label/cuda-12.1.0 -y
 pip install -r requirements.txt
 ```
 

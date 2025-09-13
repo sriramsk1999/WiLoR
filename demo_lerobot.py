@@ -171,7 +171,11 @@ def main():
             img = rgb_images[idx]
             depth = depth_images[idx].squeeze() / 1000.
 
-            detections = detector(img, conf = 0.3, verbose=False)[0]
+            for conf_val in  [0.3, 0.2, 0.1, 0.02]:
+                detections = detector(img, conf = conf_val, verbose=False)[0]
+                if len(detections) != 0:
+                    break
+
             bboxes    = []
             is_right  = []
             for det in detections:
@@ -181,10 +185,10 @@ def main():
 
             # We only continue if we have *one* *right* hand detected.
             if len(bboxes) != 1 or not is_right[0]:
+                print("SKIPPING; Could not detect bbox")
                 demo_verts.append(np.zeros((778, 3)))
                 if visualize:
                     plt.imsave(f"scaled_hand_viz/{vid_name}/{str(idx).zfill(5)}.png", img)
-                    plt.imsave(f"scaled_hand_viz/{vid_name}/mask_{str(idx).zfill(5)}.png", np.zeros_like(img))
                 continue
 
             boxes = np.stack(bboxes)
@@ -256,14 +260,13 @@ def main():
                 intrinsic = o3d.camera.PinholeCameraIntrinsic()
                 intrinsic.intrinsic_matrix = K
                 scene_pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd, intrinsic)
-                o3d.io.write_point_cloud(f"scaled_hand_viz/{vid_name}/{idx}_hand_pcd.ply", hand_pcd)
-                o3d.io.write_point_cloud(f"scaled_hand_viz/{vid_name}/{idx}_scene_pcd.ply", scene_pcd)
+                # o3d.io.write_point_cloud(f"scaled_hand_viz/{vid_name}/{idx}_hand_pcd.ply", hand_pcd)
+                # o3d.io.write_point_cloud(f"scaled_hand_viz/{vid_name}/{idx}_scene_pcd.ply", scene_pcd)
 
                 key_y = np.clip(kpts_2d[:,1].astype(int), 0, img.shape[0]-1)
                 key_x = np.clip(kpts_2d[:,0].astype(int), 0, img.shape[1]-1)
                 img[key_y, key_x] = (0, 0, 255)
                 plt.imsave(f"scaled_hand_viz/{vid_name}/{str(idx).zfill(5)}.png", img)
-                plt.imsave(f"scaled_hand_viz/{vid_name}/mask_{str(idx).zfill(5)}.png", hand_mask)
 
             demo_verts.append(tmesh.vertices)
 
