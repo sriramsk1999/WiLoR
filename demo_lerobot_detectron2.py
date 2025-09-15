@@ -8,6 +8,7 @@ NOTE: Some things to keep in mind:
 
 from pathlib import Path
 import torch
+import torch.nn as nn
 import argparse
 import os
 import cv2
@@ -165,6 +166,139 @@ def read_depth_video(video_path):
     container.close()
     return frames
 
+@torch.enable_grad()
+def smooth_bbox_sequence(bboxes, device='cuda', T=1000, w=0.05, w_c=0.02, w_s=10):
+    """
+    Temporally smooth bounding box sequences using gradient descent optimization.
+    Minimizes acceleration (jerkiness) while staying close to original detections.
+    From HAPTIC
+
+    Args:
+        bboxes: List of bbox arrays (T, 4) where each bbox is [x1, y1, x2, y2]
+        device: Device for computation
+        T: Number of optimization iterations
+        w: Regularization weight
+        w_c: Center acceleration weight
+        w_s: Scale acceleration weight
+
+    Returns:
+        Smoothed bboxes
+    """
+    if len(bboxes) < 3:  # Need at least 3 frames for acceleration
+        return bboxes
+
+    # Convert bboxes to center and scale format
+    bboxes_array = np.array(bboxes)  # (T, 4)
+    x1, y1, x2, y2 = bboxes_array.T
+
+    # Convert to center and scale
+    center_x = (x1 + x2) / 2
+    center_y = (y1 + y2) / 2
+    scale_w = x2 - x1
+    scale_h = y2 - y1
+
+    centers = np.stack([center_x, center_y], axis=1)  # (T, 2)
+    scales = np.stack([scale_w, scale_h], axis=1)     # (T, 2)
+
+    # Convert to tensors
+    center = torch.FloatTensor(centers).to(device)
+    scale = torch.FloatTensor(scales).to(device)
+    dcenter = nn.Parameter(torch.zeros_like(center))
+    dscale = nn.Parameter(torch.zeros_like(scale))
+
+    optimizer = torch.optim.AdamW([dcenter, dscale], lr=1e-3)
+
+    for t in range(T):
+        cur_center = center + dcenter
+        cur_scale = scale + dscale
+
+        # acceleration
+        center_diff = cur_center[1:] - cur_center[:-1]
+        scale_diff = cur_scale[1:] - cur_scale[:-1]
+        center_acc = center_diff[1:] - center_diff[:-1]
+        scale_acc = scale_diff[1:] - scale_diff[:-1]  # (T-2, 2)
+
+        loss_acc = w_c * center_acc.norm() + w_s * scale_acc.norm()
+        loss_reg = w * (w_c * dcenter.norm() + w_s * dscale.norm())
+        loss = loss_acc + loss_reg
+
+        if t % 100 == 0:
+            print(f"Smoothing bbox t={t}, loss={loss.item():.6f}")
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+    # Convert back to bbox format
+    smoothed_centers = (center + dcenter).cpu().detach().numpy()
+    smoothed_scales = (scale + dscale).cpu().detach().numpy()
+
+    center_x, center_y = smoothed_centers.T
+    scale_w, scale_h = smoothed_scales.T
+
+    # Convert back to x1, y1, x2, y2
+    x1_smooth = center_x - scale_w / 2
+    y1_smooth = center_y - scale_h / 2
+    x2_smooth = center_x + scale_w / 2
+    y2_smooth = center_y + scale_h / 2
+
+    smoothed_bboxes = []
+    for i in range(len(bboxes)):
+        smoothed_bboxes.append([x1_smooth[i], y1_smooth[i], x2_smooth[i], y2_smooth[i]])
+
+    return smoothed_bboxes
+
+def detect_and_smooth_hands_sequence(rgb_images, detector, vitpose, device='cuda'):
+    """
+    Detect hands across entire video sequence and apply temporal smoothing
+    """
+    print("Detecting hands across video sequence...")
+    all_detections = []
+
+    # First pass: detect hands in all frames
+    for idx in tqdm(range(len(rgb_images)), desc="Detecting hands"):
+        img = rgb_images[idx]
+        bboxes, is_right = detect_hands_detectron2(img, detector, vitpose)
+
+        # Filter for right hands only
+        right_hand_bboxes = []
+        for bbox, is_r in zip(bboxes, is_right):
+            if is_r:  # Right hand
+                right_hand_bboxes.append(bbox)
+
+        all_detections.append(right_hand_bboxes)
+
+    # Extract sequences where we have exactly one right hand
+    valid_frames = []
+    valid_bboxes = []
+
+    for idx, detections in enumerate(all_detections):
+        if len(detections) == 1:
+            valid_frames.append(idx)
+            valid_bboxes.append(detections[0])
+
+    if len(valid_bboxes) < 3:
+        print("Not enough valid detections for smoothing")
+        return all_detections
+
+    print(f"Smoothing {len(valid_bboxes)} valid detections...")
+
+    # Apply temporal smoothing to valid detections
+    smoothed_bboxes = smooth_bbox_sequence(valid_bboxes, device=device)
+
+    # Create final detection list with smoothed bboxes
+    final_detections = []
+    smooth_idx = 0
+
+    for idx in range(len(rgb_images)):
+        if idx in valid_frames:
+            final_detections.append([smoothed_bboxes[smooth_idx]])
+            smooth_idx += 1
+        else:
+            final_detections.append([])  # No detection
+
+    return final_detections
+
 def main():
     parser = argparse.ArgumentParser(description='WiLoR demo code with Detectron2')
     parser.add_argument('--input_folder', type=str, default="/home/sriram/.cache/huggingface/lerobot/sriramsk/human_mug_0718/videos/chunk-000/")
@@ -217,22 +351,20 @@ def main():
         # Same height and width
         assert rgb_images.shape[1:3] == depth_images.shape[1:3]
 
+        # Apply temporal smoothing to entire video sequence
+        print("Applying temporal smoothing to hand detections...")
+        smoothed_detections = detect_and_smooth_hands_sequence(rgb_images, detector, vitpose, device)
+
         for idx in tqdm(range(rgb_images.shape[0])):
             img = rgb_images[idx]
             depth = depth_images[idx].squeeze() / 1000.
 
-            # Use Detectron2 + ViTPose for hand detection
-            bboxes, is_right = detect_hands_detectron2(img, detector, vitpose)
-
-            # Filter for right hands only (keep original logic)
-            right_hand_bboxes = []
-            for i, (bbox, is_r) in enumerate(zip(bboxes, is_right)):
-                if is_r:  # Right hand
-                    right_hand_bboxes.append(bbox)
+            # Use temporally smoothed detections
+            right_hand_bboxes = smoothed_detections[idx]
 
             # We only continue if we have *one* *right* hand detected.
             if len(right_hand_bboxes) != 1:
-                print(f"SKIPPING. number of right hand bboxes: {len(right_hand_bboxes)}. Total bboxes: {len(bboxes)}")
+                print(f"SKIPPING frame {idx}. number of right hand bboxes: {len(right_hand_bboxes)}")
                 demo_verts.append(np.zeros((778, 3)))
                 if visualize:
                     plt.imsave(f"scaled_hand_viz/{vid_name}/{str(idx).zfill(5)}.png", img)
