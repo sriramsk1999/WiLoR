@@ -455,6 +455,10 @@ def main():
         demo_verts = np.array(demo_verts)
         demo_verts = infill_hand_verts(demo_verts)
 
+        # Edge case
+        if demo_verts[0].mean() == 0:
+            demo_verts[0] = demo_verts[1]
+
         np.save(f"{args.output_folder}/{vid_name}.npy", demo_verts)
 
 if __name__ == '__main__':
