@@ -182,7 +182,7 @@ def main():
     )
     parser.add_argument("--dset_name", default="sriramsk/mug_on_platform_20250910_human/", help="Dataset name")
     parser.add_argument("--video_index", type=int, default=0, help="Video index")
-    parser.add_argument("--intrinsics", default="aloha_intrinsics.txt", help="Path to camera intrinsics file")
+    parser.add_argument("--intrinsics", default="kinect_intrinsics.txt", help="Path to camera intrinsics file")
     parser.add_argument("--wilor_pose_dir", default="/data/sriram/lerobot_extradata", help="Path to wilor hand pose directory")
     parser.add_argument("--web", default=False, action="store_true", help="Enable web viz")
     parser.add_argument("--minimal", default=False, action="store_true", help="minimal viz")

@@ -44,6 +44,29 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 LIGHT_PURPLE=(0.25098039, 0.274117647, 0.65882353)
 
+def transform_to_world(points_cam, T_world_from_cam):
+    """Transform points from camera frame to world frame.
+
+    Args:
+        points_cam: (B, N, 3) - points in camera frame
+        T_world_from_cam: (B, 4, 4) - transformation matrix
+
+    Returns:
+        points_world: (B, N, 3) - points in world frame
+    """
+    B, N, _ = points_cam.shape
+    # Convert to homogeneous coordinates
+    ones = np.ones((B, N, 1))
+    points_hom = np.concatenate([points_cam, ones], axis=-1)  # (B, N, 4)
+
+    # Apply transformation: (B, 4, 4) @ (B, N, 4) -> (B, N, 4)
+    points_world_hom = np.einsum("bij,bnj->bni", T_world_from_cam, points_hom)
+
+    # Convert back to 3D
+    points_world = points_world_hom[:, :, :3]  # (B, N, 3)
+
+    return points_world
+
 def load_detectron2_predictor():
     """Load Detectron2 human detector"""
     cfg = get_cfg()
@@ -306,9 +329,13 @@ def main():
     parser.add_argument('--rescale_factor', type=float, default=2.0, help='Factor for padding the bbox')
     parser.add_argument('--no_gsam2', action='store_true', help='Disable GSAM2 hand masking')
     parser.add_argument('--visualize', action='store_true', default=False)
-    parser.add_argument('--intrinsics_txt', default="kinect_intrinsics.txt")
+    parser.add_argument('--calibration_json', default="aloha_calibration/calibration_multiview.json")
+    parser.add_argument('--cam_name', default="cam_azure_kinect_front")
 
     args = parser.parse_args()
+
+    with open(args.calibration_json) as f:
+        calibration_data = json.load(f)[args.cam_name]
 
     # Download and load checkpoints
     model, model_cfg = load_wilor(checkpoint_path = './pretrained_models/wilor_final.ckpt' , cfg_path= './pretrained_models/model_config.yaml')
@@ -331,8 +358,10 @@ def main():
         print("Will use GSAM2 for hand masking")
         gsam2 = GSAM2(device=device, output_dir=Path('.'), debug=False)
 
-    rgb_path = f"{args.input_folder}/observation.images.cam_azure_kinect.color/"
-    depth_path = f"{args.input_folder}/observation.images.cam_azure_kinect.transformed_depth/"
+    rgb_path = f"{args.input_folder}/observation.images.{args.cam_name}.color/"
+    depth_path = f"{args.input_folder}/observation.images.{args.cam_name}.transformed_depth/"
+    K = np.loadtxt(calibration_data["intrinsics"])
+    T_world_from_cam = np.loadtxt(calibration_data["extrinsics"])
 
     videos = sorted(os.listdir(rgb_path))
     visualize = args.visualize
@@ -345,7 +374,6 @@ def main():
 
         rgb_images = iio.imread(f"{rgb_path}/{vid_name}")
         depth_images = read_depth_video(f"{depth_path}/{vid_name}".replace(".mp4", ".mkv"))
-        K = np.loadtxt(args.intrinsics_txt)
         demo_verts = []
 
         # Same height and width
@@ -459,7 +487,9 @@ def main():
         if demo_verts[0].mean() == 0:
             demo_verts[0] = demo_verts[1]
 
-        np.save(f"{args.output_folder}/{vid_name}.npy", demo_verts)
+        # NOTE: Save in world frame
+        demo_verts_world = transform_to_world(demo_verts, T_world_from_cam[None])
+        np.save(f"{args.output_folder}/{vid_name}.npy", demo_verts_world)
 
 if __name__ == '__main__':
     main()
