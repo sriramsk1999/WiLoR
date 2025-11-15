@@ -330,12 +330,14 @@ def main():
     parser.add_argument('--no_gsam2', action='store_true', help='Disable GSAM2 hand masking')
     parser.add_argument('--visualize', action='store_true', default=False)
     parser.add_argument('--calibration_json', default="aloha_calibration/calibration_multiview.json")
-    parser.add_argument('--cam_name', default="cam_azure_kinect_front")
+    parser.add_argument('--cam_names', nargs='+', default=["cam_azure_kinect_front", "cam_azure_kinect_back"], help='List of camera names (tries in order, falls back if no hand detected)')
 
     args = parser.parse_args()
 
     with open(args.calibration_json) as f:
-        calibration_data = json.load(f)[args.cam_name]
+        all_calibration_data = json.load(f)
+        # Load calibration for all cameras
+        calibration_data = {cam_name: all_calibration_data[cam_name] for cam_name in args.cam_names}
 
     # Download and load checkpoints
     model, model_cfg = load_wilor(checkpoint_path = './pretrained_models/wilor_final.ckpt' , cfg_path= './pretrained_models/model_config.yaml')
@@ -358,12 +360,22 @@ def main():
         print("Will use GSAM2 for hand masking")
         gsam2 = GSAM2(device=device, output_dir=Path('.'), debug=False)
 
-    rgb_path = f"{args.input_folder}/observation.images.{args.cam_name}.color/"
-    depth_path = f"{args.input_folder}/observation.images.{args.cam_name}.transformed_depth/"
-    K = np.loadtxt(calibration_data["intrinsics"])
-    T_world_from_cam = np.loadtxt(calibration_data["extrinsics"])
+    # Load paths and calibration for all cameras
+    camera_data = {}
+    for cam_name in args.cam_names:
+        rgb_path = f"{args.input_folder}/observation.images.{cam_name}.color/"
+        depth_path = f"{args.input_folder}/observation.images.{cam_name}.transformed_depth/"
+        K = np.loadtxt(calibration_data[cam_name]["intrinsics"])
+        T_world_from_cam = np.loadtxt(calibration_data[cam_name]["extrinsics"])
+        camera_data[cam_name] = {
+            'rgb_path': rgb_path,
+            'depth_path': depth_path,
+            'K': K,
+            'T_world_from_cam': T_world_from_cam
+        }
 
-    videos = sorted(os.listdir(rgb_path))
+    # Use first camera to get video list (assuming all cameras have same videos)
+    videos = sorted(os.listdir(camera_data[args.cam_names[0]]['rgb_path']))
     visualize = args.visualize
 
     os.makedirs(args.output_folder, exist_ok=True)
@@ -372,31 +384,59 @@ def main():
         if visualize:
             os.makedirs(f"scaled_hand_viz/{vid_name}", exist_ok=True)
 
-        rgb_images = iio.imread(f"{rgb_path}/{vid_name}")
-        depth_images = read_depth_video(f"{depth_path}/{vid_name}".replace(".mp4", ".mkv"))
+        # Load videos from all cameras
+        camera_videos = {}
+        for cam_name in args.cam_names:
+            rgb_images = iio.imread(f"{camera_data[cam_name]['rgb_path']}/{vid_name}")
+            depth_images = read_depth_video(f"{camera_data[cam_name]['depth_path']}/{vid_name}".replace(".mp4", ".mkv"))
+            assert rgb_images.shape[1:3] == depth_images.shape[1:3]
+            camera_videos[cam_name] = {
+                'rgb': rgb_images,
+                'depth': depth_images
+            }
+
+        # Get number of frames (assume all cameras have same number)
+        num_frames = camera_videos[args.cam_names[0]]['rgb'].shape[0]
         demo_verts = []
+        frame_cameras = []  # Track which camera was used for each frame
 
-        # Same height and width
-        assert rgb_images.shape[1:3] == depth_images.shape[1:3]
+        # Apply temporal smoothing to hand detections for all cameras
+        print("Applying temporal smoothing to hand detections for all cameras...")
+        all_smoothed_detections = {}
+        for cam_name in args.cam_names:
+            print(f"Processing camera: {cam_name}")
+            smoothed_detections = detect_and_smooth_hands_sequence(
+                camera_videos[cam_name]['rgb'], detector, vitpose, device
+            )
+            all_smoothed_detections[cam_name] = smoothed_detections
 
-        # Apply temporal smoothing to entire video sequence
-        print("Applying temporal smoothing to hand detections...")
-        smoothed_detections = detect_and_smooth_hands_sequence(rgb_images, detector, vitpose, device)
+        for idx in tqdm(range(num_frames)):
+            # Try cameras in order until we find a detection
+            selected_cam = None
+            right_hand_bboxes = None
 
-        for idx in tqdm(range(rgb_images.shape[0])):
-            img = rgb_images[idx]
-            depth = depth_images[idx].squeeze() / 1000.
+            for cam_name in args.cam_names:
+                detections = all_smoothed_detections[cam_name][idx]
+                if len(detections) == 1:
+                    selected_cam = cam_name
+                    right_hand_bboxes = detections
+                    break
 
-            # Use temporally smoothed detections
-            right_hand_bboxes = smoothed_detections[idx]
-
-            # We only continue if we have *one* *right* hand detected.
-            if len(right_hand_bboxes) != 1:
-                print(f"SKIPPING frame {idx}. number of right hand bboxes: {len(right_hand_bboxes)}")
+            # If no camera detected a hand, skip this frame
+            if selected_cam is None:
                 demo_verts.append(np.zeros((778, 3)))
+                frame_cameras.append(None)
                 if visualize:
+                    # Visualize the primary camera
+                    img = camera_videos[args.cam_names[0]]['rgb'][idx]
                     plt.imsave(f"scaled_hand_viz/{vid_name}/{str(idx).zfill(5)}.png", img)
                 continue
+
+            # Use the selected camera's data
+            img = camera_videos[selected_cam]['rgb'][idx]
+            depth = camera_videos[selected_cam]['depth'][idx].squeeze() / 1000.
+            K = camera_data[selected_cam]['K']
+            T_world_from_cam = camera_data[selected_cam]['T_world_from_cam']
 
             boxes = np.array([right_hand_bboxes[0]])  # Take the first (and only) right hand
             right = np.array([1])  # Right hand
@@ -479,16 +519,29 @@ def main():
                 plt.imsave(f"scaled_hand_viz/{vid_name}/{str(idx).zfill(5)}.png", img)
 
             demo_verts.append(tmesh.vertices)
+            frame_cameras.append(selected_cam)
 
         demo_verts = np.array(demo_verts)
-        demo_verts = infill_hand_verts(demo_verts)
+
+        # NOTE: Transform to world frame BEFORE infilling
+        # This ensures interpolation happens in a consistent coordinate frame
+        demo_verts_world = np.zeros_like(demo_verts)
+        for idx in range(len(demo_verts)):
+            if frame_cameras[idx] is None:
+                # No detection - keep as zeros
+                demo_verts_world[idx] = demo_verts[idx]
+            else:
+                # Transform using the camera that was used for this frame
+                T_world_from_cam = camera_data[frame_cameras[idx]]['T_world_from_cam']
+                demo_verts_world[idx] = transform_to_world(demo_verts[idx:idx+1], T_world_from_cam[None])[0]
+
+        # Now infill in world coordinates
+        demo_verts_world = infill_hand_verts(demo_verts_world)
 
         # Edge case
-        if demo_verts[0].mean() == 0:
-            demo_verts[0] = demo_verts[1]
+        if demo_verts_world[0].mean() == 0:
+            demo_verts_world[0] = demo_verts_world[1]
 
-        # NOTE: Save in world frame
-        demo_verts_world = transform_to_world(demo_verts, T_world_from_cam[None])
         np.save(f"{args.output_folder}/{vid_name}.npy", demo_verts_world)
 
 if __name__ == '__main__':
