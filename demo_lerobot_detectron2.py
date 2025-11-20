@@ -494,6 +494,7 @@ def main():
             # Could be 0, could be 777 for some reason on one instance?
             if tmesh.vertices.shape[0] != 778:
                 tmesh.vertices = np.zeros((778, 3))
+                selected_cam = None
 
             if visualize:
                 hand_pcd = o3d.geometry.PointCloud()
