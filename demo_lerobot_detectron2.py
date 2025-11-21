@@ -381,6 +381,7 @@ def main():
     os.makedirs(args.output_folder, exist_ok=True)
 
     for vid_name in tqdm(videos):
+        if os.path.exists(f"{args.output_folder}/{vid_name}.npy"): continue
         if visualize:
             os.makedirs(f"scaled_hand_viz/{vid_name}", exist_ok=True)
 
@@ -539,10 +540,21 @@ def main():
         # Now infill in world coordinates
         demo_verts_world = infill_hand_verts(demo_verts_world)
 
-        # Edge case
-        if demo_verts_world[0].mean() == 0:
-            demo_verts_world[0] = demo_verts_world[1]
+        # Handle edge cases: first N frames and last N frames that are still zeros
+        valid_mask = np.array([np.mean(np.abs(frame)) != 0 for frame in demo_verts_world])
 
+        # Handle leading zeros: copy from first non-zero frame
+        if not valid_mask[0] and valid_mask.any():
+            first_valid_idx = np.where(valid_mask)[0][0]
+            demo_verts_world[:first_valid_idx] = demo_verts_world[first_valid_idx]
+
+        # Handle trailing zeros: copy from last non-zero frame
+        if not valid_mask[-1] and valid_mask.any():
+            last_valid_idx = np.where(valid_mask)[0][-1]
+            demo_verts_world[last_valid_idx+1:] = demo_verts_world[last_valid_idx]
+
+        if (demo_verts_world.mean(1).mean(1) == 0).any():
+            raise Exception("Some elements where hand pose could not be estimated or interpolated, please check.")
         np.save(f"{args.output_folder}/{vid_name}.npy", demo_verts_world)
 
 if __name__ == '__main__':
