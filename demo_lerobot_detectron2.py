@@ -329,6 +329,7 @@ def main():
     parser.add_argument('--rescale_factor', type=float, default=2.0, help='Factor for padding the bbox')
     parser.add_argument('--no_gsam2', action='store_true', help='Disable GSAM2 hand masking')
     parser.add_argument('--visualize', action='store_true', default=False)
+    parser.add_argument('--visualize_dir', default="scaled_hand_viz")
     parser.add_argument('--calibration_json', default="aloha_calibration/calibration_multiview.json")
     parser.add_argument('--cam_names', nargs='+', default=["cam_azure_kinect_front", "cam_azure_kinect_back"], help='List of camera names (tries in order, falls back if no hand detected)')
 
@@ -383,7 +384,7 @@ def main():
     for vid_name in tqdm(videos):
         if os.path.exists(f"{args.output_folder}/{vid_name}.npy"): continue
         if visualize:
-            os.makedirs(f"scaled_hand_viz/{vid_name}", exist_ok=True)
+            os.makedirs(f"{args.visualize_dir}/{vid_name}", exist_ok=True)
 
         # Load videos from all cameras
         camera_videos = {}
@@ -430,7 +431,7 @@ def main():
                 if visualize:
                     # Visualize the primary camera
                     img = camera_videos[args.cam_names[0]]['rgb'][idx]
-                    plt.imsave(f"scaled_hand_viz/{vid_name}/{str(idx).zfill(5)}.png", img)
+                    plt.imsave(f"{args.visualize_dir}/{vid_name}/{str(idx).zfill(5)}.png", img)
                 continue
 
             # Use the selected camera's data
@@ -518,7 +519,7 @@ def main():
                 key_y = np.clip(kpts_2d[:,1].astype(int), 0, img.shape[0]-1)
                 key_x = np.clip(kpts_2d[:,0].astype(int), 0, img.shape[1]-1)
                 img[key_y, key_x] = (0, 0, 255)
-                plt.imsave(f"scaled_hand_viz/{vid_name}/{str(idx).zfill(5)}.png", img)
+                plt.imsave(f"{args.visualize_dir}/{vid_name}/{str(idx).zfill(5)}.png", img)
 
             demo_verts.append(tmesh.vertices)
             frame_cameras.append(selected_cam)
